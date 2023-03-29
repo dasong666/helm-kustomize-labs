@@ -29,7 +29,7 @@ Lab Sample Application User Story:
 - Use port ```8080``` for the application.
 - Use the following environmental variables to configure the database connection:
 
-![](helmdb-env-vars.png)
+![](images/helmdb-env-vars.png)
 
 * If no pods are returned, monitoring for user-defined projects is disabled.  
 You need to following the instructions in section ```2.3. Preparing to configure the monitoring stack```  
