@@ -184,3 +184,6 @@ oc get deployments exoplanets-exochart -o jsonpath='{.spec.template.spec.contain
 In this lab, we have shown how to use Helm Chart to specify a baseline sample application OpenShift deployment.  We then simulated environmental changes to the baseline deployment using Kustomize to patch the deployment.
 
 In the next lab, we will show how to use OpenShift GitOps to request patching changes using ```Pull Requests``` and Kustomize overlays
+
+## References
+- Kustomize Feature List: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#kustomize-feature-list
