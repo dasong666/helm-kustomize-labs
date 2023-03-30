@@ -1,6 +1,8 @@
-## Using Helm Charts and Kustomize to Management OpenShift Deployment
+## Using Helm Charts and Kustomize to Manage OpenShift Application Deployment
 
-In this lab, you will create a ```Helm Chart``` for an application, and deploy it to an OpenShift cluster. Then you will customize the deployed application using ```Kustomize```
+In this lab, Part I, you will create a ```Helm Chart``` for an application, and deploy it to an OpenShift cluster. In Part II, you will then further configure the deployed application using ```Kustomize```
+
+## NOTE: the code in this lab was tested and validated on OCP 4.10, later versions of OCP (e.g. 4.12) is not tested yet by this lab.
 
 ## Outcomes
 
@@ -15,6 +17,9 @@ To perform this exercise, make sure that you have network access to the followin
 - A running OpenShift cluster.
 - Container image repository hosted in ```quay.io/redhattraining/exoplanets:v1.0```
 - CockroachDB Helm Chart from repository ```https://charts.cockroachdb.com/```
+- ```helm``` CLI installed locally on workstation
+- ```oc``` OpenShift CLI installed locally on workstation
+- ```tree``` utility to help visualize Helm chart directory structure
 
 
 ## Summary of Lab Exercise
@@ -31,165 +36,151 @@ Lab Sample Application User Story:
 
 ![](images/helmdb-env-vars.png)
 
-* If no pods are returned, monitoring for user-defined projects is disabled.  
-You need to following the instructions in section ```2.3. Preparing to configure the monitoring stack```  
-https://access.redhat.com/documentation/en-us/openshift_container_platform/4.10/html-single/monitoring/index#configuring-the-monitoring-stack. 
-* In the above documentation, make sure ```enableUserWorkload: true``` is defined in ```cluster-monitoring-config``` ConfigMap in the ```openshift-monitoring``` namespace.  The documentation style can be confusing to some readers.
+- Use ```exoplanets``` as the Helm Chart installation name
+- Use ```exokustom``` as the Kustomize directory
+- Use ```helm template``` command to create the baseline definition from the Helm Chart
+- Use ```test``` as the directory for the Test ```overlay```
+- Use the following resource limits for the Test ```overlay```:
 
-## Install Kafka CRD with Metrics
+![](images/test-overlay-config.png)
 
-- Install the Red Hat AMQ-Streams Operator in your own namepsace (e.g. amq-streams)
-- Apply the Kafka cluster definition with metrics defined
-- Wait for the Kafka/Zookeeper pods to be in running status
+## Part I: Helm Chart Lab
 
+- Create the ```exochart``` Helm chart
 ```shell
-oc apply -f yaml/kafka-metrics.yaml -n <project-name>
+helm create exochart
+cd exochart
+tree .
 ```
 
-## Install PodMonitors and PrometheusRule
+![](images/tree.png)
 
-- Multiple PodMonitor resources are defined in: 
-https://github.com/strimzi/strimzi-kafka-operator/blob/main/examples/metrics/prometheus-install/strimzi-pod-monitor.yaml
-- Save a copy of the yaml to your local filesystem, you will be making changes to your local copy in next step.
-- For each PodMonitor resource, edit the ```spec.namespaceSelector.matchNames``` property to match the namespace of your choice.
-
+- Edit the ```values.yaml``` file to add the sample application
 ```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
+image:
+  repository: quay.io/redhattraining/exoplanets
+  pullPolicy: IfNotPresent
+  tag: "v1.0"
+```
+
+- Add database dependency to ```Chart.yaml```
+```yaml
+dependencies:
+- name: cockroachdb
+  version: 6.0.4
+  repository: https://charts.cockroachdb.com/
+```
+
+- Install the database dependencies for the chart
+```shell
+helm dependency update
+```
+
+- Update ```templates/deployment.yaml``` to pass environment variables defined in the ```values.yaml```
+```yaml
+containers:
+  - name: {{ .Chart.Name }}
+    ...output omitted...
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    env:
+      {{- range .Values.env }}
+    - name: "{{ .name }}"
+      value: "{{ .value }}"
+      {{- end }}
+```
+
+- Add the environmental variables to the end of the ```values.yaml```
+```yaml
+env:
+  - name: "DB_HOST"
+    value: "exoplanets-cockroachdb"
+  - name: "DB_NAME"
+    value: "postgres"
+  - name: "DB_USER"
+    value: "root"
+  - name: "DB_PORT"
+    value: "26257"
+```
+
+- Create a new namespace on OpenShift and install the sample application using Helm Chart
+```shell
+oc new-project chartdemo
+helm install exoplanets .
+```
+
+- If everything is installed and deployed successfully, you should see the sample application and database pods spinned up
+![](images/pods.png)
+
+## Part II: Kustomize Lab
+
+Suppose we have different levels of test validation sandboxes requirements.  Some are used to simulate low CPU, low memory environments, while others are used to simulate high performance and throughput.  
+
+In Part I, we created a baseline OpenShift application deployment model, how can we now design a solution to support various levels of environment testing while keeping those testing constraints separate from the core baseline deployment model?
+
+We will now use ```Kustomize``` to specify patching the baseline deployment using ```overlays``` 
+
+- Extract the sample application ```deployment``` definitions from the Helm Chart to form the ```base``` Kustomize specification
+```shell
+cd exokustom
+helm template exoplanets ../exochart > ./base/deployment.yaml
+```
+
+- Reference the newly created ```deployment.yaml``` in the ```base/kustomization.yaml``` file
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- deployment.yaml
+```
+
+- In the ```overlays/dev-test/replica_limits.yaml``` file, we are specifying further changes to the ```Deployment``` CRD that pertains to our dev-test environment.  Recall that in Part I, using Helm Chart, the ```values.yaml``` specified our deployment to have ```replicaCount: 1```
+```yaml
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: cluster-operator-metrics
-  labels:
-    app: strimzi
+  name: exoplanets-exochart
 spec:
-  selector:
-    matchLabels:
-      strimzi.io/kind: cluster-operator
-  namespaceSelector:
-    matchNames:
-      - <project-name> 
-  podMetricsEndpoints:
-  - path: /metrics
-    port: http
-...
+  replicas: 5
+  template:
+    spec:
+      containers:
+        - name: exochart
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
 ```
 
-- Deploy the pod monitors to the namespace where your Kafka cluster is running. 
-```shell
-oc apply -f yaml/strimzi-pod-monitor.yaml -n <project-name>
-```
-- Deploy the example Prometheus rules to the same project. 
-https://github.com/strimzi/strimzi-kafka-operator/blob/main/examples/metrics/prometheus-install/prometheus-rules.yaml. 
-(use the copy from GitHub, no need to make changes.)
-```shell
-oc apply -f prometheus-rules.yaml -n <project-name>
-```
-- Following screenshots show successful deployment of PodMonitors and PrometheusRule. 
-```shell
-oc get podmonitor -n <project-name>
-```
-![](podmonitor.png) 
-```shell
-oc get prometheusrule -n <project-name>
-```
-![](promorule.png)
-
-## Grafana Credentials: ServiceAccount, ClusterRoleBinding
-
-- Create a ```ServiceAccount``` for Grafana. Here the resource is named ```grafana-serviceaccount```. 
+- Each overlay also requires a ```kustomization.yaml```
 ```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: grafana-serviceaccount
-  labels:
-    app: strimzi
-```
-- Deploy the ```ServiceAccount``` to the project containing your Kafka cluster. 
-```shell
-oc apply -f yaml/serviceaccount.yaml -n <project-name>
-```
-- Create a ```ClusterRoleBinding``` resource that assigns the ```cluster-monitoring-view``` role to the Grafana ServiceAccount. 
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: grafana-cluster-monitoring-binding
-  labels:
-    app: strimzi
-subjects:
-  - kind: ServiceAccount
-    name: grafana-serviceaccount
-    namespace: amq-streams
-roleRef:
-  kind: ClusterRole
-  name: cluster-monitoring-view
-  apiGroup: rbac.authorization.k8s.io
-```
-- Deploy the ```ClusterRoleBinding``` to the project containing your Kafka cluster. 
-```shell
-oc apply -f yaml/clusterrolebinding.yaml -n <project-name>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+  - ../../base
+
+patches:
+  - replica_limits.yaml
 ```
 
-## Deploying Grafana with a Prometheus datasource
-- OCP includes a ```Thanos Querier``` instance in the ```openshift-monitoring``` project. It is used to aggregate platform metrics.  
-- To consume the required platform metrics, your Grafana instance requires a ```Prometheus data source``` that can connect to ```Thanos Querier```. To configure this connection, you create a ```ConfigMap``` that authenticates, by using a token, to the ```oauth-proxy``` sidecar that runs alongside Thanos Querier. A ```datasource.yaml``` file is used as the source of the config map. 
-- Finally, you deploy the Grafana application with the config map mounted as a ```volume``` to the project containing your Kafka cluster. 
-
-### Grafana/Prometheus Deployment Steps
-- Get the access token of the Grafana ServiceAccount
+- Apply the ```dev-test``` overlay to the running instance of the ```exoplanets``` sample application
 ```shell
-oc serviceaccounts get-token grafana-serviceaccount -n <project-name>
+oc apply -k overlays/dev-test
 ```
-- Create a ```datasource.yaml``` file containing the Thanos Querier configuration for Grafana. 
-Paste the access token into the ```httpHeaderValue1``` property as indicated:  
-```yaml
-apiVersion: 1
-datasources:
-- name: Prometheus
-  type: prometheus
-  url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
-  access: proxy
-  basicAuth: false
-  withCredentials: false
-  isDefault: true
-  jsonData:
-    timeInterval: 5s
-    tlsSkipVerify: true
-    httpHeaderName1: "Authorization"
-  secureJsonData:
-    httpHeaderValue1: 'Bearer ${GRAFANA-ACCESS-TOKEN}"
-  editable: true
-```
-- Create a config map named ```grafana-config``` from the datasource.yaml file:
-```shell
-oc create configmap grafana-config --from-file=datasource.yaml -n <project-name>
-```
-- Deploy the Grafana application to the project containing your Kafka cluster:
-```shell
-oc apply -f yaml/grafana.yaml -n <project-name>
-```
-- Verify the Grafana pod is running
-- Create Openshift Route to Grafana portal using either Openshift Admin Console or command line
-```shell
-oc create route edge <grafana-route-name> --service=grafana --namespace=<project-name>
-```
-#### Troubleshooting Tips: Grafana Connection Issues to Prometheus Datasource
-- Delete the existing ```Prometheus Data Source``` from Grafana->Configuration->Data Sources
-- Add a new ```Prometheus Data Source```
-- Fill out these fields in the data source configuration screen
-  - URL: ```https://thanos-querier.openshift-monitoring.svc.cluster.local:9091```
-  - Skip TLS Verify: ```true```
-  - Add a Custom HTTP Header called ```Authorization```
-  - Value in this format: ```Bearer <your-token>```
-  - Click ```Save & Test``` button
-  - If error, repeat above steps, take care to not have any spaces or typos in the bearer token string. 
 
-![](promo-datasource.png)
+- Wait for the pods to finish restarting
+```shell
+oc get pods --watch -n <project-name>
+```
 
-## Importing the example Grafana dashboards
-- An example Grafana Kafka Dashboard can be found here. 
-https://github.com/strimzi/strimzi-kafka-operator/blob/main/examples/metrics/grafana-dashboards/strimzi-kafka.json
-- To upload it: Grafana->Dashboard->Import->Upload JSON file. 
-- If successfully installed, you should see a dashboard named ```Strimzi Kafka```
+- Verify that the Deployment ```resource limits``` are using the values from our ```overlays/dev-test/replica_limits.yaml```
+```shell
+oc get deployments exoplanets-exochart -o jsonpath='{.spec.template.spec.containers[0].resources.limits}'
+```
 
-![](strimzi-kafka.png)
+## Learning Summary
+
+In this lab, we have shown how to use Helm Chart to specify a baseline sample application OpenShift deployment.  We then simulated environmental changes to the baseline deployment using Kustomize to patch the deployment.
+
+In the next lab, we will show how to use OpenShift GitOps to request patching changes using ```Pull Requests``` and Kustomize overlays
