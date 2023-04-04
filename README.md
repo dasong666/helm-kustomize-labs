@@ -1,3 +1,17 @@
+## From DevOps to GitOps
+
+- ```GitOps``` is an operational model that revolves around using ```Git``` as the single source of truth for declarative infrastructure and applications. 
+
+- It emphasizes version control, collaboration, and automated deployment of application code and infrastructure, treating both as code. With GitOps, the desired state of your infrastructure and applications is defined in Git repositories, and any changes to the desired state are automatically applied to the systems by continuous delivery pipelines.
+
+### In a GitOps workflow:
+
+- Developers and operators define the desired state of the application and infrastructure using declarative configuration files (YAML, JSON, etc.).
+These configurations are stored in a Git repository, making Git the single source of truth.
+- Any changes to the configuration files are reviewed and merged through Git's standard branching, pull request, and merge workflows.
+- Continuous delivery pipelines (e.g., using tools like Argo CD, Flux, or Jenkins) monitor the Git repository and automatically apply the changes to the appropriate environments (dev, staging, production).
+- The pipelines provide feedback on the success or failure of the changes, allowing for rapid detection and resolution of issues.
+
 ## Using Helm Charts and Kustomize to Manage OpenShift Application Deployment
 
 In this lab, Part I, you will create a ```Helm Chart``` for an application, and deploy it to an OpenShift cluster. In Part II, you will then further configure the deployed application using ```Kustomize```
