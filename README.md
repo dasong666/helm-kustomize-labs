@@ -25,6 +25,37 @@ Let's consider a simple example of a GitOps workflow for an OpenShift-based appl
 
 ![](images/gitops-workflow-main.png)
 
+## GitOps Templating
+
+With new OpenShift deployment model, ```yaml``` manifests are stored inside ```Git```. So the question often becomes, “How do I
+declaratively describe my resources in Git without copying and pasting the same YAML everywhere?”
+
+### Kustomize
+
+- ```Kustomize``` is a framework for ```patching``` (selectively altering files), built into OpenShift.
+- It is a configuation manager that lets you customize untemplated YAML files without touching the original YAML configuration file.
+- It is organized in a hierarchical directory structure of ```bases``` and ```overlays```. 
+- A ```base``` is a directory with a ```kustomization.yaml``` file containing a set of resources and associated customizations. A base has no knowledge of an overlay and can be used in multiple overlays.
+- An ```overlay``` is a directory with its own ```kustomization.yaml``` file that refers to other Kustomize directories as its bases. 
+- An ```overlay``` can draw from multiple bases. It composes all resources from bases and can also add customizations on top of them. You can also
+write ```kustomization.yaml``` files that build on one another (for example, a base can refer to another base).
+- This figure shows a typical use for Kustomize. A directory structure containing many files is shown on the left, and excerpts from particular ```kustomization.yaml``` files on the right.
+
+![](images/kustomize-overview.png)
+
+- The ```base``` directory on the left contains the ```kustomization.yaml``` file that is the foundation for the others. 
+- This file is made up of a ```DeploymentConfig```, a ```Service```, and a ```Route``` (which could be replaced by an Ingress if you’re using an ingress controller). 
+- For example, the ```base``` OpenShift deployment artifacts (e.g. DeploymentConfig, Service, etc.) could be generated directly from code base, the environment specific settings (e.g. dev, test, staging, production) for these deployment artifacts are defined using ```overlays```
+
+### Helm
+
+```Helm``` functions as a package manager for OpenShift. If you’ve worked on an OpenShift cluster previously, there is a good chance that you have used Helm at some point for its automation benefits. Helm provides not only a method of packaging an application and parameterizing YAML manifests but also a ```templating engine``` that can deploy your application to different environments.
+
+```Helm``` consists of ```charts```, which are packaged and templatized versions of your YAML manifests. You can inject values into the parameters defined in the templates, and Helm injects these values into the manifests to create a release. A release is the end state representation of the YAML that is deployed to your OpenShift cluster. The information is stored as a secret on the cluster.
+
+![](images/helm-overview.png)
+
+
 ## Using Helm Charts and Kustomize to Manage OpenShift Application Deployment
 
 In this lab, Part I, you will create a ```Helm Chart``` for an application, and deploy it to an OpenShift cluster. In Part II, you will then further configure the deployed application using ```Kustomize```
