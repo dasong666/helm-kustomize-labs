@@ -2,15 +2,28 @@
 
 - ```GitOps``` is an operational model that revolves around using ```Git``` as the single source of truth for declarative infrastructure and applications. 
 
-- It emphasizes version control, collaboration, and automated deployment of application code and infrastructure, treating both as code. With GitOps, the desired state of your infrastructure and applications is defined in Git repositories, and any changes to the desired state are automatically applied to the systems by continuous delivery pipelines.
+- It emphasizes version control, collaboration, and automated deployment of application code and infrastructure, treating both as code. With GitOps, the desired state of your infrastructure and applications is defined in ```Git``` repositories, and any changes to the desired state are automatically applied to the systems by continuous delivery pipelines.
 
 ### In a GitOps workflow:
 
 - Developers and operators define the desired state of the application and infrastructure using declarative configuration files (YAML, JSON, etc.).
 These configurations are stored in a Git repository, making Git the single source of truth.
 - Any changes to the configuration files are reviewed and merged through Git's standard branching, pull request, and merge workflows.
-- Continuous delivery pipelines (e.g., using tools like Argo CD, Flux, or Jenkins) monitor the Git repository and automatically apply the changes to the appropriate environments (dev, staging, production).
+- Continuous delivery pipelines (e.g., using tools like Argo CD, Tekton, or Jenkins) monitor the Git repository and automatically apply the changes to the appropriate environments (dev, staging, production).
 - The pipelines provide feedback on the success or failure of the changes, allowing for rapid detection and resolution of issues.
+
+### Use Case Example
+
+Let's consider a simple example of a GitOps workflow for an OpenShift-based application:
+
+- You store the OpenShift manifests (e.g., DeploymentConfig, Service, ConfigMap, etc.) in a ```Git``` repository.
+- When a developer wants to update the application or its configuration, they create a branch, make the changes, and submit a ```Pull Request```
+- The ```Pull Request``` is reviewed by team members, and if approved, it is merged into the main branch.
+- A GitOps tool like ```Argo CD``` detects the changes in the main branch and automatically deploys the updated manifests to the OpenShift cluster.
+- If any issues arise during the deployment, the tool provides feedback, allowing for quick detection and resolution.
+- This ```GitOps``` approach enables a clear separation of concerns, enforces best practices, and allows for better collaboration, versioning, and auditing. Additionally, it automates deployment, reducing the risk of human errors and improving the overall reliability of the system.
+
+![](images/gitops-workflow-main.png)
 
 ## Using Helm Charts and Kustomize to Manage OpenShift Application Deployment
 
