@@ -1,15 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: tsis-bootstrap
+  name: alp-bootstrap
   namespace: openshift-gitops
 spec:
   destination:
     server: https://kubernetes.default.svc
-  project: tsis-default
+  project: default
   source:
-    path: exokustom
-    repoURL: https://github.com/dasong666/helm-kustomize-labs.git
+    path: base
+    repoURL: https://github.com/dasong666/gitops-app-bookinfo-fork1.git 
     targetRevision: HEAD
   syncPolicy:
     automated: {}
